@@ -20,7 +20,7 @@ COVER_MESES = 9                 # cubrir 9 meses en campaña
 PRICE_LIMIT = 1500              # tope para pedido normal
 EXCEP_FAMS  = {17, 18, 21, 42}  # familias SOLO en fichero caros
 
-st.title("VIM  -  Viamar Inventory Management)")
+st.title("VPIM – Pedidos automáticos (cobertura 2 meses)")
 
 # ───────────────────────────────
 # SUBIR CSV
@@ -44,7 +44,15 @@ try:
         st.info(f"Histórico guardado en {snap_path}")
 
     # ───────── LIMPIEZA Y CAMPOS DERIVADOS ─────────
+    df.columns = df.columns.str.strip()
     df.rename(columns={df.columns[1]: "Descripcion", df.columns[2]: "Familia"}, inplace=True)
+
+    # Mapear posibles nombres alternativos ➜ Stock balance
+    df.rename(columns={
+        'Stock balance ': 'Stock balance',
+        'Stock_balance': 'Stock balance',
+        'Balance': 'Stock balance'
+    }, inplace=True)
 
     for c in ['Familia', 'Stock balance', 'On Order', 'Back Order Customer', 'Repurchase Price']:
         df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
@@ -115,13 +123,19 @@ try:
     df['Valor stock €'] = df['Stock balance'] * df['Precio Unitario (€)']
     ventas_tot = df['Ventas 12m €'].sum()
     stock_tot  = df['Valor stock €'].sum()
-    rot = ventas_tot / stock_tot if stock_tot else 0
+    rot        = ventas_tot / stock_tot if stock_tot else 0
+
+    # Índice de servicio
+    refs_con_stock = (df['Stock efectivo'] > 0).sum()
+    total_refs     = len(df)
+    service_pct    = refs_con_stock / total_refs * 100 if total_refs else 0
 
     st.subheader("📊 KPI global")
-    k1, k2, k3 = st.columns(3)
+    k1, k2, k3, k4 = st.columns(4)
     k1.metric("Ventas 12m (€)", f"{ventas_tot:,.2f}")
     k2.metric("Valor stock (€)", f"{stock_tot:,.2f}")
     k3.metric("Índice rotación", f"{rot:.2f}")
+    k4.metric("Índice de servicio (%)", f"{service_pct:.1f}%")
 
     df['Stock sano'] = df['Ventas 12m €'] > 0
     salud = (
@@ -152,7 +166,7 @@ try:
         st.subheader("💰 Pedido artículos caros / familias exentas")
         st.dataframe(pedido_caros)
 
-    # ───────── UTILIDAD PARA XLSX ─────────
+        # ───────── UTILIDAD PARA XLSX ─────────
     def to_xlsx(df_, sheet_name="Hoja"):
         buf = BytesIO()
         with pd.ExcelWriter(buf, engine='xlsxwriter') as w:
@@ -160,24 +174,22 @@ try:
         buf.seek(0)
         return buf
 
-        # ───────── DESCARGAS ─────────
-
-    # 1. Pedido ≤ 1 500 € (Excel) + CSV VIM sin cabecera
+    # ───────── DESCARGAS ─────────
+    # 1. Pedido ≤ 1 500 € y CSV VIM
     if not pedido_norm.empty:
         st.download_button(
-            "📄 Descargar pedidos (≤ 1 500 €)",
+            "📄 Descargar pedidos (≤ 1 500 €)",
             to_xlsx(pedido_norm, 'Pedido'),
             "pedidos_vpim.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-
         vim_csv = (
             pedido_norm[['Part no', 'Pedido sugerido']]
             .rename(columns={'Part no': 'Articulo', 'Pedido sugerido': 'Pedido'})
             .to_csv(index=False, sep=';', encoding='utf-8', header=False)
         )
         st.download_button(
-            "📄 Descargar VIM artículos ≤ 1 500 €",
+            "📄 Descargar VIM artículos ≤ 1 500 €",
             vim_csv,
             "VIM_para_importar_pedido_normal.csv",
             mime="text/csv"
@@ -203,8 +215,8 @@ try:
 
     # 4. Informe KPI + salud + observaciones
     kpi_sheet = pd.DataFrame({
-        'KPI': ['Ventas 12m (€)', 'Valor stock (€)', 'Índice rotación'],
-        'Valor': [ventas_tot, stock_tot, rot]
+        'KPI': ['Ventas 12m (€)', 'Valor stock (€)', 'Índice rotación', 'Índice servicio (%)'],
+        'Valor': [ventas_tot, stock_tot, rot, service_pct]
     })
     sheets_info = {
         'KPI': kpi_sheet,
@@ -225,6 +237,9 @@ try:
 
 except Exception as e:
     st.error(f"Error: {e}")
+
+
+
 
 
 
