@@ -20,7 +20,7 @@ COVER_MESES = 9                 # cubrir 9 meses en campaña
 PRICE_LIMIT = 1500              # tope para pedido normal
 EXCEP_FAMS  = {17, 18, 21, 42}  # familias SOLO en fichero caros
 
-st.title("VPIM – Pedidos automáticos (cobertura 2 meses)")
+st.title("VIM – Viamar Inventory Management")
 
 # ───────────────────────────────
 # SUBIR CSV
